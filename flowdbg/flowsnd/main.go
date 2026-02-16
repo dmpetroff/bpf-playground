@@ -53,7 +53,7 @@ func main() {
 	}
 
 	go func() {
-		buf := make([]byte, 1024-42)
+		buf := make([]byte, 1024)
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {

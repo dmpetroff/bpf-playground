@@ -1,22 +1,32 @@
 RATE := 1m
 CLANG := clang
 
-SUDO := pwn
+SUDO := sudo
+# Идентификатор сетевого неймспейса
+OUT_NS := xdp_prot
+# Маска виртуальной подсети
+NETMASK := 24
+# Это virtual ethernet, который будет виден в "корневом" сетевом неймспейсе
 IF_IN := ingress
 IF_IN_IP := 192.168.69.69
+# Это virtual ethernet, который будет виден в сетевом неймспейсе $(OUT_NS)
 IF_OUT := egress
 IF_OUT_IP := 192.168.69.96
-NETMASK := 24
-OUT_NS := xdp_prot
-BUILD_DIR := /tmp/ratelim
 
+# В наше время дорогих SSD лучше билдить в tmpfs
+BUILD_DIR := /tmp/ratelim
+# Флаги для bpf-программы
 BPF_CFLAGS := -target bpf -Wall -g -O2
 
-
+# Порт, на который будет лететь UDP-трафик
 PORT := 1234
+# Корневой исходник XDP-программы. Его зависимости будут автоматически отслеживаться.
+XDP_SRC := xdp_prog.bpf.c
+
+-include Makefile.local
+
 RCV_EXE := $(BUILD_DIR)/flowrcv
 SND_EXE := $(BUILD_DIR)/flowsnd
-XDP_SRC := xdp_prog.bpf.c
 XDP_OBJ := $(patsubst %.c,%.o,$(BUILD_DIR)/$(notdir $(XDP_SRC)))
 XDP_DEP := $(patsubst %,%.d,$(XDP_OBJ))
 
@@ -31,6 +41,9 @@ all:
 	@/bin/echo -e "  Remove all interfaces, namespaces etc with\n\tmake teardown"
 
 build-xdp: $(XDP_OBJ)
+
+check-route:
+	$(SUDO) ip route get $(IF_OUT_IP) | grep --color=auto $(IF_IN)
 
 # Go userspace programs
 run-rcv: $(RCV_EXE)
