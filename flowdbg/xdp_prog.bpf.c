@@ -26,7 +26,7 @@ int shaper(struct xdp_md *xdp)
 	}
 	if (s != NULL) {
 		__u64 no = __sync_add_and_fetch(&s->pkt_no, 1);
-		if ((no&7) > 4)
+		if ((no % 5) == 1)
 			return XDP_DROP;
 	}
 	return XDP_PASS;

@@ -19,10 +19,16 @@ func (b *BpsWriter) Write(p []byte) (n int, err error) {
 }
 
 func main() {
-	l, err := net.Listen("tcp", ":1234")
+	addr, err := net.ResolveUDPAddr("udp", ":1234")
 	if err != nil {
 		panic(err)
 	}
+
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
 
 	go func() {
 		p := message.NewPrinter(language.English)
@@ -31,13 +37,5 @@ func main() {
 			p.Printf("%d bps\n", atomic.SwapUint64(&bytes, 0))
 		}
 	}()
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			continue
-		}
-
-		go io.Copy(&BpsWriter{}, conn)
-	}
+	io.Copy(&BpsWriter{}, conn)
 }

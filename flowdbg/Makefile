@@ -1,11 +1,11 @@
-RATE := 24k
+RATE := 1m
 CLANG := clang
 
 SUDO := pwn
 IF_IN := ingress
-IF_IN_IP := 10.69.69.69
+IF_IN_IP := 192.168.69.69
 IF_OUT := egress
-IF_OUT_IP := 10.69.69.96
+IF_OUT_IP := 192.168.69.96
 NETMASK := 24
 OUT_NS := xdp_prot
 BUILD_DIR := /tmp/ratelim
@@ -31,13 +31,16 @@ run-rcv: $(RCV_EXE)
 run-snd: $(SND_EXE)
 	$(SND_EXE) $(IF_OUT_IP):$(PORT) $(RATE)
 
-$(BUILD_DIR)/%: %.go | $(BUILD_DIR)
+$(BUILD_DIR)/%: %/main.go | $(BUILD_DIR)
 	go build -o $@ $<
 
 # XDP stuff
 run-xdp: $(XDP_OBJ)
 	-$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric off
 	$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric obj $(XDP_OBJ) sec xdp
+
+stop-xdp:
+	$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric off
 
 $(BUILD_DIR)/%.bpf.o: %.bpf.c | $(BUILD_DIR)
 	$(CLANG) -target bpf -g -O2 -Wall -c -o$@ $<
