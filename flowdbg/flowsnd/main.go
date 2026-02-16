@@ -52,8 +52,16 @@ func main() {
 		log.Fatalf("Can't run pv: %s", err.Error())
 	}
 
-	buf := make([]byte, 1200)
-	go io.CopyBuffer(snd, stdout, buf)
+	go func() {
+		buf := make([]byte, 1024-42)
+		for {
+			n, err := stdout.Read(buf)
+			if err != nil {
+				break
+			}
+			_, _ = snd.Write(buf[:n])
+		}
+	}()
 	pv.Start()
 	pv.Wait()
 }
