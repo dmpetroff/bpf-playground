@@ -10,11 +10,17 @@ NETMASK := 24
 OUT_NS := xdp_prot
 BUILD_DIR := /tmp/ratelim
 
+BPF_CFLAGS := -target bpf -Wall -g -O2
+
 
 PORT := 1234
 RCV_EXE := $(BUILD_DIR)/flowrcv
 SND_EXE := $(BUILD_DIR)/flowsnd
-XDP_OBJ := $(BUILD_DIR)/xdp_prog.bpf.o
+XDP_SRC := xdp_prog.bpf.c
+XDP_OBJ := $(patsubst %.c,%.o,$(BUILD_DIR)/$(notdir $(XDP_SRC)))
+XDP_DEP := $(patsubst %,%.d,$(XDP_OBJ))
+
+SUDO_NETNS := $(SUDO) ip netns exec $(OUT_NS)
 
 all:
 	@/bin/echo -e "  Prepare with\n\tmake setup"
@@ -24,9 +30,11 @@ all:
 	@/bin/echo -e "  Senders will spawn pv for rate limiting"
 	@/bin/echo -e "  Remove all interfaces, namespaces etc with\n\tmake teardown"
 
+build-xdp: $(XDP_OBJ)
+
 # Go userspace programs
 run-rcv: $(RCV_EXE)
-	$(SUDO) ip netns exec $(OUT_NS) $(RCV_EXE)
+	$(SUDO_NETNS) $(RCV_EXE)
 
 run-snd: $(SND_EXE)
 	$(SND_EXE) $(IF_OUT_IP):$(PORT) $(RATE)
@@ -36,25 +44,31 @@ $(BUILD_DIR)/%: %/main.go | $(BUILD_DIR)
 
 # XDP stuff
 run-xdp: $(XDP_OBJ)
-	-$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric off
-	$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric obj $(XDP_OBJ) sec xdp
+	-$(SUDO_NETNS) ip link set dev $(IF_OUT) xdpgeneric off
+	$(SUDO_NETNS) ip link set dev $(IF_OUT) xdpgeneric obj $(XDP_OBJ) sec xdp
 
 stop-xdp:
-	$(SUDO) ip netns exec $(OUT_NS) ip link set dev $(IF_OUT) xdpgeneric off
+	$(SUDO_NETNS) ip link set dev $(IF_OUT) xdpgeneric off
 
-$(BUILD_DIR)/%.bpf.o: %.bpf.c | $(BUILD_DIR)
-	$(CLANG) -target bpf -g -O2 -Wall -c -o$@ $<
+$(XDP_OBJ) $(XDP_DEP): $(XDP_SRC) | $(BUILD_DIR)
+	$(CLANG) $(BPF_CFLAGS) -MT $(XDP_OBJ) -MT $(XDP_OBJ) -MP -MD -MF $(XDP_DEP) -c -o $(XDP_OBJ) $<
 
 setup:
 	$(SUDO) ip netns add $(OUT_NS)
 	$(SUDO) ip link add dev $(IF_IN) type veth peer name $(IF_OUT)
 	$(SUDO) ifconfig $(IF_IN) $(IF_IN_IP)/$(NETMASK) up
 	$(SUDO) ip link set $(IF_OUT) netns $(OUT_NS)
-	$(SUDO) ip netns exec $(OUT_NS) ifconfig $(IF_OUT) $(IF_OUT_IP)/$(NETMASK) up
+	$(SUDO_NETNS) ifconfig $(IF_OUT) $(IF_OUT_IP)/$(NETMASK) up
 
 teardown:
 	-$(SUDO) ip link delete $(IF_IN)
 	-$(SUDO) ip netns del $(OUT_NS)
 
 $(BUILD_DIR):
-	mkdir $@
+	mkdir -p $@
+
+dep: $(XDP_DEP)
+
+ifeq (,$(filter dep,$(MAKECMDGOALS)))
+-include $(XDP_DEP)
+endif
