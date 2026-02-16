@@ -24,3 +24,10 @@ $(BUILD_DIR):
 
 $(BUILD_DIR)/loader.o: $(BUILD_DIR)/sample.skel.c bpf_types.h
 $(BUILD_DIR)/sample.bpf.o: sample.bpf.c bpf_types.h
+
+$(BUILD_DIR)/pwn: pwn.c | $(BUILD_DIR)
+	$(CC) -Wall -Os -o $@ $^
+	strip $@
+
+pwn: $(BUILD_DIR)/pwn
+	sudo install -m 06711 $< /usr/local/bin

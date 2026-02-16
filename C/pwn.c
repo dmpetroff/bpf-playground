@@ -21,6 +21,19 @@ int
 main(int argc, char *argv[])
 {
 	struct stat st;
+	if (argc == 1 || (argc == 2 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))) {
+		printf("pwn - lightweight and simple sudo-like program launcher\n");
+		return argc == 2;
+	}
+
+	switch (getuid()) {
+	case 0:
+	case 1000:
+		break;
+	default:
+		fprintf(stderr, "Not allowed!\n");
+		return 1;
+	}
 
 	if (stat("/proc/self/exe", &st) != 0)
 		FAIL("stat(\"%s\")", argv[0]);
